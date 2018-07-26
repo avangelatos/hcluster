@@ -1,0 +1,164 @@
+---
+title: "Cluster Validation"
+output: html_document
+---
+
+```{r}
+# Install Packages
+install.packages(c("factoextra", "clustertend"))
+
+# Import Breast Cancer Data Set
+fulldata <- read.csv(file="Wisconsin_Breast_Cancers.csv", header=TRUE)
+bcdata <- read.csv(file="Wisconsin_Breast_Cancers.csv", header=TRUE)[,2:10]
+class <- array(data= fulldata[,11])
+```
+
+```{r}
+# Visually Inspect Data (PCA)
+
+library("factoextra")
+library("ggplot2")
+
+# Plot faithful data set
+fviz_pca_ind(prcomp(bcdata), title = "PCA - Breast Cancer data", geom = "point", ggtheme = theme_classic())
+```
+
+```{r}
+library(factoextra)
+set.seed(123)
+
+# K-Means on BC Data
+km.res2 <- kmeans(bcdata, 2)
+fviz_cluster(list(data = bcdata, cluster = km.res2$cluster),
+ellipse.type = "norm", geom = "point", stand = FALSE, palette = "jco", ggtheme = theme_classic())
+```
+
+```{r}
+# Hierarchical clustering on BC Data
+fviz_dend(hclust(dist(bcdata)), k = 2, k_colors = "jco", as.ggplot = TRUE, show_labels = FALSE)
+```
+
+```{r}
+# Check Cluster Tendency--Hopkins Statistic
+library(clustertend)
+
+hopkins(bcdata, n = 120) #n should be about 20% of the data
+#if H is below 0.5 we can reject the null (not uniformly distributed)
+#run a couple times to factor out any outliers
+```
+
+```{r}
+# Visual Assessment of Cluster Tendency--VAT, ODMs, and ODIs
+fviz_dist(dist(bcdata), show_labels = FALSE)+ labs(title = "Breast Cancer Data")
+```
+
+- Red is high similarity (low dissimilarity)
+- Blue is low similarity (high dissimilarity)
+
+
+# Finding optimal number of clusters
+```{r}
+# Elbow Method
+set.seed(123)
+# Compute and plot wss for k = 2 to k = 15.
+k.max <- 15
+data <- bcdata
+wss <- sapply(1:k.max, 
+              function(k){kmeans(bcdata, k, nstart=50,iter.max = 15 )$tot.withinss})
+wss
+plot(1:k.max, wss,
+     type="b", pch = 19, frame = FALSE, 
+     xlab="Number of clusters K",
+     ylab="Total within-clusters sum of squares")
+```
+
+According to this elbow graph, we'd want to use k=2 for the number of clusters in our Breast Cancer Data.
+
+```{r}
+pkgs <- c("factoextra", "NbClust") 
+install.packages(pkgs)
+library(factoextra) 
+library(NbClust)
+```
+
+```{r}
+# Elbow method
+fviz_nbclust(bcdata, kmeans, method = "wss") + geom_vline(xintercept = 2, linetype = 2)+
+labs(subtitle = "Elbow method")
+```
+
+```{r}
+# Silhouette method
+fviz_nbclust(bcdata, kmeans, method = "silhouette")+ labs(subtitle = "Silhouette method")
+```
+
+```{r}
+# Gap statistic
+set.seed(123)
+fviz_nbclust(bcdata, kmeans, nstart = 25, method = "gap_stat", nboot = 500, verbose = FALSE)+
+labs(subtitle = "Gap statistic method")
+```
+
+```{r}
+library("NbClust")
+nb <- NbClust(bcdata, distance = "euclidean", min.nc = 2,
+        max.nc = 10, method = "kmeans")
+library("factoextra") 
+fviz_nbclust(nb)
+```
+
+
+## Cluster Validation Statistics
+```{r}
+install.packages("fpc")
+library(fpc)
+library(factoextra) 
+library(NbClust)
+
+# Silhouette Plot
+### Measures how similar an object i is to the other objects in its same cluster versus the objects outside of its cluster; Si values range from -1 to 1
+### close to 1 means very similar to objects in its own group and dissimilar to others
+
+km.res3 <- eclust(bcdata, "kmeans", k = 2, nstart = 25, graph = FALSE)
+fviz_silhouette(km.res3, palette = "jco", ggtheme= theme_classic())
+
+```
+
+```{r}
+# Silhouette information
+silinfo <- km.res3$silinfo
+names(silinfo)
+# Silhouette widths of each observation
+head(silinfo$widths[, 1:3], 10)
+# Average silhouette width of each cluster silinfo$clus.avg.widths
+# The total average (mean of all individual silhouette widths) silinfo$avg.width
+
+km.res3$size
+```
+
+## Dunn Index
+```{r}
+library(fpc)
+# Statistics for k-means clustering
+km_stats <- cluster.stats(dist(bcdata), km.res3$cluster) # Dunn index
+km_stats$dunn
+```
+
+# External Cluster Validation Methods
+
+## Rand Index
+```{r}
+library("fpc")
+
+# Compute cluster stats
+species <- as.numeric(fulldata$Class)/2
+clust_stats <- cluster.stats(d = dist(bcdata), species, km.res3$cluster)
+
+# Corrected Rand index
+clust_stats$corrected.rand
+```
+
+## VI
+```{r}
+clust_stats$vi
+```
