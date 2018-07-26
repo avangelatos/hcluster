@@ -1,0 +1,169 @@
+---
+title: "Other Data to Cluster"
+output: html_document
+---
+
+# Generating 5 Cluster Dataset
+```{r}
+library(ggplot2)
+set.seed(147)
+x <- matrix(rnorm(100*7), 100, 7)
+which <- sample(1:4, 100, replace = TRUE, prob = c(0.3, 0.2, 0.35, 0.15))
+xmean <- matrix(rnorm(4*7, sd = 6), 4, 7)
+xclustered <- x + xmean[which, ]
+xclustered <- as.data.frame(xclustered)
+ggplot(data = xclustered) +
+ geom_point(aes(x = V1, y = V2, color = as.factor(which)), alpha = 0.5)
+
+blob <- xclustered
+```
+
+## Cluster Tendency Tests
+```{r}
+# Visually Inspect Data (PCA)
+
+library(factoextra)
+library(ggplot2)
+
+# Plot faithful data set
+fviz_pca_ind(prcomp(blob), title = "PCA - Generated Cluster Data", geom = "point", ggtheme = theme_classic())
+```
+
+```{r}
+#PCA colored for k-means cluster assignment
+blob.kmeans <- kmeans(blob, 4, iter.max = 100, nstart=4)
+
+fviz_pca_ind(prcomp(blob), title = "PCA - Generated Cluster Data", palette ="lancet" , geom = "point", ggtheme = theme_classic(), habillage = as.factor(blob.kmeans$cluster))
+```
+
+```{r}
+# PCA on the K-means Results
+blob.kmeans1 <- blob.kmeans$cluster
+blobpca <- prcomp(blob)
+blobpca2 <- as.data.frame(blobpca$x)
+blobpca2$sample <- sapply(strsplit(as.character(row.names(blob)), "_"), "[[", 1)
+blobpca2$kmeans <- blob.kmeans1
+blobpca2$actual <- which
+
+library(ggplot2)
+library(grid)
+library(gridExtra)
+
+percentage <- round(blobpca$sdev/sum(blobpca$sdev) * 100, 2)
+percentage <- paste(colnames(blobpca2), "(", paste(as.character(percentage)), "%", ")", sep = "")
+
+ggplot(data = blobpca2) +
+ geom_point(aes(x = PC1, y = PC2, color = as.factor(kmeans), shape = as.factor(actual))) +
+ xlab(percentage[1]) +
+ ylab(percentage[2]) +
+ labs(title = "PCA") +
+ theme_classic() 
+
+```
+```{r}
+# K-Means on Data w fviz_cluster (pca included)
+library(factoextra)
+
+fviz_cluster(list(data = blob, cluster = blob.kmeans$cluster),
+ellipse.type = "norm", geom = "point", stand = FALSE, palette = "lancet", ggtheme = theme_classic())
+```
+
+
+
+
+```{r}
+# Hierarchical clustering on Random Data
+fviz_dend(hclust(dist(blob)), k = 4, k_colors = "lancet", as.ggplot = TRUE, show_labels = FALSE)
+```
+
+## Statistical Tests
+```{r}
+# Hopkins Statistic
+library(clustertend)
+hopkins(blob, n = 20)
+```
+```{r}
+# Visual Assessment of Cluster Tendency--VAT, ODMs, and ODIs
+fviz_dist(dist(blob), show_labels = FALSE)+ labs(title = "Random Data")
+```
+
+
+```{r}
+library(factoextra) 
+library(NbClust)
+
+# Elbow method
+fviz_nbclust(blob, kmeans, method = "wss") + geom_vline(xintercept = 4, linetype = 2)+
+labs(subtitle = "Elbow method")
+```
+
+```{r}
+# Silhouette method
+fviz_nbclust(blob, kmeans, method = "silhouette")+ labs(subtitle = "Silhouette method")
+```
+
+```{r}
+# Gap statistic
+set.seed(123)
+fviz_nbclust(blob, kmeans, nstart = 25, method = "gap_stat", nboot = 50, verbose = FALSE)+
+labs(subtitle = "Gap statistic method")
+```
+
+```{r}
+library("NbClust")
+nb <- NbClust(blob, distance = "euclidean", min.nc = 2,
+        max.nc = 10, method = "kmeans")
+library("factoextra") 
+fviz_nbclust(nb)
+```
+
+## Cluster Validation Statistics
+```{r}
+library(fpc)
+library(factoextra) 
+library(NbClust)
+
+# Silhouette Plot
+blob.kmeans <- eclust(blob, "kmeans", k = 4, nstart = 25, graph = FALSE)
+fviz_silhouette(blob.kmeans, palette = "lancet", ggtheme= theme_classic())
+
+```
+
+```{r}
+# Silhouette information
+silinfo <- blob.kmeans$silinfo
+names(silinfo)
+# Silhouette widths of each observation
+head(silinfo$widths[, 1:3], 10)
+# Average silhouette width of each cluster silinfo$clus.avg.widths
+# The total average (mean of all individual silhouette widths) silinfo$avg.width
+
+blob.kmeans$size
+```
+
+## Dunn Index
+```{r}
+library(fpc)
+# Statistics for k-means clustering
+km_stats <- cluster.stats(dist(blob), blob.kmeans$cluster) # Dunn index
+km_stats$dunn
+```
+
+```{r}
+# all 30 indices
+nb1 <- NbClust(blob, distance = "euclidean", min.nc = 2, max.nc = 10, method = "ward.D")
+fviz_nbclust(nb1)
+
+nb2 <- NbClust(blob, distance = "euclidean", min.nc = 2, max.nc = 10, method = "single")
+fviz_nbclust(nb2)
+
+nb3 <- NbClust(blob, distance = "euclidean", min.nc = 2, max.nc = 10, method = "complete")
+fviz_nbclust(nb3)
+
+nb4 <- NbClust(blob, distance = "euclidean", min.nc = 2, max.nc = 10, method = "average")
+fviz_nbclust(nb4)
+
+nb5 <- NbClust(blob, distance = "euclidean", min.nc = 2, max.nc = 10, method = "kmeans")
+fviz_nbclust(nb5)
+```
+
